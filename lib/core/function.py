@@ -15,6 +15,9 @@ import torch
 
 from core.evaluate import accuracy
 
+from torch.utils.tensorboard import SummaryWriter
+import torchvision
+writer = SummaryWriter()
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         # measure data loading time
         data_time.update(time.time() - end)
         #target = target - 1 # Specific for imagenet
-
+        grid = torchvision.utils.make_grid(input)
         # compute output
         output = model(input)
         target = target.cuda(non_blocking=True)
@@ -60,6 +63,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         batch_time.update(time.time() - end)
         end = time.time()
 
+  
         if i % config.PRINT_FREQ == 0:
             msg = 'Epoch: [{0}][{1}/{2}]\t' \
                   'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
@@ -78,6 +82,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                 global_steps = writer_dict['train_global_steps']
                 writer.add_scalar('train_loss', losses.val, global_steps)
                 writer.add_scalar('train_top1', top1.val, global_steps)
+                writer.add_image('images',grid,0)
                 writer_dict['train_global_steps'] = global_steps + 1
 
 
@@ -95,12 +100,15 @@ def validate(config, val_loader, model, criterion, output_dir, tb_log_dir,
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
             # compute output
+            #print(input)
             output = model(input)
-
+            #print(output)
+            
+            #print(torch.max(output, dim=1))
             target = target.cuda(non_blocking=True)
-
+            #print(target)
             loss = criterion(output, target)
-
+            
             # measure accuracy and record loss
             losses.update(loss.item(), input.size(0))
             prec1, prec5 = accuracy(output, target, (1, 5))

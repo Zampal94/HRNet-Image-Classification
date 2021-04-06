@@ -35,7 +35,8 @@ from utils.modelsummary import get_model_summary
 from utils.utils import get_optimizer
 from utils.utils import save_checkpoint
 from utils.utils import create_logger
-
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter()
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train classification network')
@@ -147,26 +148,41 @@ def main():
     train_dataset = datasets.ImageFolder(
         traindir,
         transforms.Compose([
-            transforms.RandomResizedCrop(config.MODEL.IMAGE_SIZE[0]),
+            #transforms.RandomResizedCrop(config.MODEL.IMAGE_SIZE[0]),
+            transforms.Resize((224,224)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
+            #normalize,
         ])
     )
+    class_sample_count=[501,254,16,6564]
+    weights = 1 / torch.Tensor(class_sample_count)
+    #weights = weights.double()
+    targets = []
+    for _, target in train_dataset:
+        targets.append(target)
+    targets = torch.tensor(targets)
+    print(targets)
+    samples_weight = torch.tensor([weights[t] for t in targets])
+    print(samples_weight)
+    train_sampler= torch.utils.data.sampler.WeightedRandomSampler(samples_weight,64)
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
+        sampler=train_sampler,
         batch_size=config.TRAIN.BATCH_SIZE_PER_GPU*len(gpus),
-        shuffle=True,
+        
         num_workers=config.WORKERS,
         pin_memory=True
     )
 
     valid_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(int(config.MODEL.IMAGE_SIZE[0] / 0.875)),
-            transforms.CenterCrop(config.MODEL.IMAGE_SIZE[0]),
+            transforms.Resize((224,224)),
+            #transforms.Resize(int(config.MODEL.IMAGE_SIZE[0] / 0.875)),
+            #transforms.CenterCrop(config.MODEL.IMAGE_SIZE[0]),
             transforms.ToTensor(),
-            normalize,
+            #normalize,
         ])),
         batch_size=config.TEST.BATCH_SIZE_PER_GPU*len(gpus),
         shuffle=False,
@@ -196,7 +212,7 @@ def main():
             'state_dict': model.module.state_dict(),
             'perf': perf_indicator,
             'optimizer': optimizer.state_dict(),
-        }, best_model, final_output_dir, filename='checkpoint.pth.tar')
+        }, best_model, final_output_dir, filename='checkpoint.pth')
 
     final_model_state_file = os.path.join(final_output_dir,
                                           'final_state.pth.tar')
